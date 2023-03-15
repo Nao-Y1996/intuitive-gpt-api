@@ -1,0 +1,4 @@
+__pycache__
+vnev/
+docker/redis/*.rdb
+.idea
