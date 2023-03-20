@@ -1,15 +1,14 @@
 FROM python:3.10.10
+# Use python 3.9 or higher
 
 # コンテナ内での作業ディレクトリを設定
 WORKDIR /app
 
 # ローカルのrequirements.txtをコンテナ内にコピー
-COPY ./docker/python/requirements.txt .
+COPY ./container/python/requirements.txt .
 
 # 必要なパッケージをインストール
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
-
-COPY ./main.py .
 
 ENV OPENAI_API_KEY "yourKey"
 

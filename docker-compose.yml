@@ -4,13 +4,15 @@ services:
     container_name: chatgpt-python-container
     build:
       context: .
-      dockerfile: docker/python/Dockerfile
+      dockerfile: container/python/Dockerfile
+    volumes:
+      - ./app:/app
     ports:
       - "8000:80" # コンテナの80番ポートをホストの8000番ポートから利用する
   redis:
     container_name: chatgpt-redis-container
     build:
       context: .
-      dockerfile: docker/redis/Dockerfile
+      dockerfile: container/redis/Dockerfile
     ports:
       - "6379:6379"

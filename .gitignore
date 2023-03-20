@@ -2,3 +2,4 @@ __pycache__
 vnev/
 docker/redis/*.rdb
 .idea
+container/redis/dump.rdb
