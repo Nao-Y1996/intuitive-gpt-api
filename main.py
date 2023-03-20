@@ -1,18 +1,20 @@
 import json
+import os
 
+import openai
+import redis
 import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
-import os
-import openai
-import redis
+
+from gpt_client import GPT
 
 app = FastAPI()
 redis = redis.Redis(host="localhost", port=6379)
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 
-class Prompt(BaseModel):
+class UserMessage(BaseModel):
     value: str
 
 
@@ -24,11 +26,7 @@ class SummarizeTarget(BaseModel):
     value: str
 
 
-class Chat(BaseModel):
-    messages: list[dict] = []
-
-
-system_settings = """わかりやすく答えてください"""
+SETTING_PROMPT = """わかりやすく答えてください"""
 
 summarize_settings = """
 ユーザーから渡される文章の要約をしてください。
@@ -41,47 +39,30 @@ summarize_settings = """
 
 
 @app.post("/")
-def gpt(prompt: Prompt):
-    print(f"you : {prompt.value}")
-    chat = Chat()
+def gpt(use_message: UserMessage):
+    print(f"you : {use_message.value}")
+    gpt = GPT()
     result = redis.zrange('chat', 0, -1, withscores=True)
     chat_length = len(result)
-    # ChatGPTの振る舞い特性を設定する
+    # チャット履歴がない場合はChatGPTの振る舞い特性の初期プロンプトを設定する
     if chat_length == 0:
-        system = {"role": "system",
-                  "content": system_settings}
-        chat.messages.append(system)
-        redis.zadd("chat", {json.dumps(system): chat_length})
+        gpt.add_setting(SETTING_PROMPT)
+        redis.zadd("chat", {json.dumps(gpt.latest_system_prompt()): chat_length})
 
     # チャットの履歴を取得してリクエストに含める
     for elm in result:
         past_message = json.loads(elm[0].decode("utf-8"))
-        chat.messages.append(past_message)
-
-    # ユーザーの新たな発言をリクエストに含める
-    new_message = {"role": "user",
-                   "content": prompt.value}
-    chat.messages.append(new_message)
-
+        gpt.add_prompt(past_message)
+    # ユーザーの新たな発言をリクエストに含めてリクエストを送る
+    response = gpt.add_user_message(use_message.value).request()
     # ユーザーの新たな発言をチャット履歴に保存する
-    redis.zadd("chat", {json.dumps(new_message): chat_length})
-
-    # ChatGPTのAPIにリクエストを送りレスポンスを得る
-    res = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=chat.messages
-    )
-    # レスポンスからチャットの返事部分を得る
-    response_message = {"role": "assistant", "content": res["choices"][0]["message"]["content"]}
+    redis.zadd("chat", {json.dumps(gpt.latest_user_prompt()): chat_length})
     # チャットの返事をチャット履歴に保存する
-    redis.zadd("chat", {json.dumps(response_message): chat_length + 1})
+    redis.zadd("chat", {json.dumps(gpt.latest_assistant_prompt()): chat_length + 1})
 
-    print(f"AI : {response_message['content']}")
-
-    # chat = redis.zrange('chat', 0, -1, withscores=True)
-
+    print(f"AI : {response}")
     # チャットの返事をレスポンスボディに入れて返す
-    return {"response": response_message}
+    return {"response": response}
 
 
 # chat履歴を削除する
@@ -100,26 +81,10 @@ def transcript(file: File):
 
 @app.post("/summarize")
 def summarize(target: SummarizeTarget):
-    chat = Chat()
-    # ChatGPTの振る舞い特性を設定する
-    system = {"role": "system",
-              "content": summarize_settings}
-    chat.messages.append(system)
-
-    # 要約対象の文章ををリクエストに含める
-    new_message = {"role": "user",
-                   "content": target.value}
-    chat.messages.append(new_message)
-
-    # ChatGPTのAPIにリクエストを送りレスポンスを得る
-    res = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=chat.messages
-    )
-    # レスポンスからチャットの返事部分を得る
-    summary = res["choices"][0]["message"]["content"]
+    gpt = GPT()
+    # ChatGPTの振る舞い特性を設定し、要約対象の文章ををリクエストに含めてリクエストを送る
+    summary = gpt.add_setting(summarize_settings).add_user_message(target.value).request()
     print(summary)
-
     # 要約をレスポンスボディに入れて返す
     return {"response": summary}
 
