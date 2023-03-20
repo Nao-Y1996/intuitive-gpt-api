@@ -72,6 +72,21 @@ class GPT:
         return response_message
 
 
+class Wisper:
+    def __init__(self, model: str = None, language: str = None):
+        if model is not None:
+            self.model = model
+        if language is not None:
+            self.language = language
+        self.model = "whisper-1"
+        self.language = "ja"
+
+    def get_transcript(self, file_path: str):
+        file = open(file_path, "rb")
+        res = openai.Audio.transcribe(model=self.model, file=file, language=self.language)
+        return res["text"]
+
+
 if __name__ == '__main__':
     gpt = GPT()
 

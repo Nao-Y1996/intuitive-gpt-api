@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from gpt_client import GPT
+from openai_client import GPT, Wisper
 
 app = FastAPI()
 redis = redis.Redis(host="localhost", port=6379)
@@ -74,9 +74,9 @@ def clear():
 
 @app.post("/transcript")
 def transcript(file: File):
-    audio_file = open(file.path, "rb")
-    transcript = openai.Audio.transcribe(model="whisper-1", file=audio_file, language="ja")
-    return {"transcript": transcript["text"]}
+    wisper = Wisper()
+    transcription = wisper.get_transcript(file_path=file.path)
+    return {"transcription": transcription}
 
 
 @app.post("/summarize")
